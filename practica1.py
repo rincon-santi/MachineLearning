@@ -5,7 +5,18 @@ from matplotlib.patches import Circle
 import math as math
 
 def xtild(x):
-    return np.concatenate(([[1]*X.shape[1]],X),axis=0)
+    return np.concatenate(([[1]*x.shape[1]],x),axis=0)
+
+colorcodes = {1 : 'r', 2 : 'g', 3 : 'b', 4 : 'c', 5 : 'y'}
+codecolors = {'r' : 1, 'g' : 2, 'b' : 3, 'c' : 4, 'y' : 5}
+codesigns = {1 : 1, 2 : -1}
+signcodes = {1 : 1, -1 : 2}
+def codeonehot(k, K):
+    return np.array([0]*(k-1)+[1]+[0]*(K-k))
+
+# This won't be necessary
+#def onehotcode(arr):
+#    if float(arr[0]) == 1.0
 
 # Calculates linear form to classify data using the least squares method
 def least_squares(X,t):
@@ -54,21 +65,22 @@ def lda(X,t):
 
 # Classifies data X using linear form W
 def classify(x,w):
+    global K
     xtilde = np.concatenate(([1],x),axis=0)
-    if len(w.shape) == 1:
+    if K == 2:
         if (np.dot(xtilde,w) >= 0):
             return 1
         else:
-            return -1
+            return 2
     else:
-        return np.argmax(w.T.dot(np.array([1,a,b])))
+        return np.argmax(w.T.dot(xtilde)) + 1
 
 
 #### GUI
 
 
 class CreatePoints(object):
-    
+
     def __init__(self, fig, ax):
         self.circle_list = []
 
@@ -87,23 +99,53 @@ class CreatePoints(object):
 
         self.press_event = None
         self.current_circle = None
-        self.color = 'r'
+        self.color = colorcodes[1]
 
+    def updateColor(self, k):
+        self.color = colorcodes[k]
+
+    def shrink(self, K):
+        for circle, color in \
+            [(circle,color) for (circle,color) in self.circle_list
+             if codecolors[color] > K]:
+            self.circle_list.remove((circle,color))
+            circle.remove()
+        self.fig.canvas.draw()
+
+    def getX(self):
+        if self.circle_list == []:
+            return []
+        x = np.array([[self.circle_list[0][0].center[0],
+                       self.circle_list[0][0].center[1]]]).T
+        for circle, color in self.circle_list[1:]:
+            x = np.concatenate((x,
+                            np.array([[circle.center[0], circle.center[1]]]).T
+                                ),axis=1)
+        return x
+    
+    def getSignT(self):
+        return np.array([[1 if codecolors[color] == 1 else -1
+                for circle,color in self.circle_list]])
+        
+    def getOneHotT(self, K):
+        return np.array([ codeonehot(codecolors[color], K)
+                for circle,color in self.circle_list]).T
+        
     def on_press(self, event):
         if ax != event.inaxes:
             return
         # First clear all lines
-        for line in self.ax.lines:
+        for line in [line for line in self.ax.lines]:
             line.remove()
         
         x0, y0 = event.xdata, event.ydata
 
         
-        for circle in self.circle_list:
+        for circle,color in self.circle_list:
             contains, attr = circle.contains(event)
             if contains:
                 if event.button == 3:
-                    self.circle_list.remove(circle)
+                    self.circle_list.remove((circle,color))
                     circle.remove()
                     self.fig.canvas.draw()
                     return
@@ -116,7 +158,7 @@ class CreatePoints(object):
 
         c = Circle((x0, y0), 0.5, color=self.color)
         self.ax.add_patch(c)
-        self.circle_list.append(c)
+        self.circle_list.append((c,self.color))
         self.current_circle = None
         self.fig.canvas.draw()
 
@@ -147,30 +189,74 @@ plt.subplots_adjust(bottom=0.2)
 
 circu = CreatePoints(fig,ax)
 
-axprev = plt.axes([0.7, 0.05, 0.1, 0.075])
-axnext = plt.axes([0.81, 0.05, 0.1, 0.075])
+def fsquares(event):
+    x = circu.getX()
+    t = circu.getSignT() if K == 2 else circu.getOneHotT(K)
+    w = least_squares(x,t)
+    grid = [(x,y) for x in np.linspace(-20,20,15) for y in np.linspace(-20,20,15)]
+    for (a,b) in grid:
+        clase = classify(np.array([a,b]), w)
+        ax.plot(a,b,'.{}'.format(colorcodes[clase]))
+    fig.canvas.draw()
+
+def ffisher(event):
+    pass
+
+
+axminsquares = plt.axes([0.7, 0.05, 0.1, 0.075])
+axfisher = plt.axes([0.81, 0.05, 0.1, 0.075])
+bminsquares = Button(axminsquares, 'Squares')
+bminsquares.on_clicked(fsquares)
+bfisher = Button(axfisher, 'Fisher')
+bfisher.on_clicked(ffisher)
+
 axslid = plt.axes([0.5, 0.05, 0.1, 0.075])
 slid = Slider(axslid, 'Classes', 2, 5, valfmt='%d')
 
+K = 2
 def update(val):
-    pass
+    global k
+    global K
+    global bfisher
+    global bclass
+    newK = int(math.floor(val))
+    #Shrink data points and current class if necessary
+    if newK < k:
+        k = newK
+        bclass.label.set_text('Class {}'.format(k))
+    if newK < K:
+        circu.shrink(newK)
+    K = newK
+    if K>2:
+        # Hide Fisher button
+        axfisher.patch.set_visible(False)
+        bfisher.label.set_visible(False)
+        axfisher.axis('off')
+        fig.canvas.draw()
+    else:
+        # Show Fisher button
+        axfisher.patch.set_visible(True)
+        bfisher.label.set_visible(True)
+        axfisher.axis('on')
+        fig.canvas.draw()
 
 slid.on_changed(update)
 
+
 axclass = plt.axes([0.3, 0.05, 0.1, 0.075])
 bclass = Button(axclass, 'Class 1')
+
 k = 1
 def changeclass(event):
     global k
     global bclass
-    k = k + 1
+    if k == K:
+        k = 1
+    else:
+        k = k + 1
+    circu.updateColor(k)
     bclass.label.set_text('Class {}'.format(k))
 bclass.on_clicked(changeclass)
 
-bnext = Button(axnext, 'Next')
-#bnext.on_clicked(callback.next)
-bprev = Button(axprev, 'Previous')
-#bprev.on_clicked(callback.prev)
 
-ax.plot([1],[1],'o')
 plt.show()
