@@ -47,7 +47,7 @@ def lda(X,t):
             var_class_mat[clase] += np.dot((col-mv),(col-mv).T)
         S_W += var_class_mat[clase]
         clase+=1
-    W=np.dot(np.linalg.inv(S_W),mean_vectors[1]-mean_vectors[0])  # we have to check determinant
+    W=np.dot(np.linalg.inv(S_W),mean_vectors[1]-mean_vectors[0])  
     W.shape=W.shape[0]
     s=[]
     m=[]
@@ -119,7 +119,8 @@ class CreatePoints(object):
                        self.circle_list[0][0].center[1]]]).T
         for circle, color in self.circle_list[1:]:
             x = np.concatenate((x,
-                            np.array([[circle.center[0], circle.center[1]]]).T
+                            np.array([[circle.center[0],
+                                       circle.center[1]]]).T
                                 ),axis=1)
         return x
     
@@ -130,13 +131,16 @@ class CreatePoints(object):
     def getOneHotT(self, K):
         return np.array([ codeonehot(codecolors[color], K)
                 for circle,color in self.circle_list]).T
-        
+
+    def clearlines(self):
+        for line in [line for line in self.ax.lines]:
+            line.remove()
+
     def on_press(self, event):
         if ax != event.inaxes:
             return
         # First clear all lines
-        for line in [line for line in self.ax.lines]:
-            line.remove()
+        self.clearlines()
         
         x0, y0 = event.xdata, event.ydata
 
@@ -162,6 +166,10 @@ class CreatePoints(object):
         self.current_circle = None
         self.fig.canvas.draw()
 
+    def clear(self):
+        self.clearlines()
+        self.shrink(0)
+        
     def on_release(self, event):
         if ax != event.inaxes:
             return
@@ -193,15 +201,32 @@ def fsquares(event):
     x = circu.getX()
     t = circu.getSignT() if K == 2 else circu.getOneHotT(K)
     w = least_squares(x,t)
+    circu.clearlines()
     grid = [(x,y) for x in np.linspace(-20,20,15) for y in np.linspace(-20,20,15)]
+    if K == 2:
+        dom = np.linspace(-20,20,100)
+        ran = (-w[0] -w[1]*dom )/w[2]
+        ax.plot(dom,ran,'c')
     for (a,b) in grid:
         clase = classify(np.array([a,b]), w)
         ax.plot(a,b,'.{}'.format(colorcodes[clase]))
     fig.canvas.draw()
 
 def ffisher(event):
-    pass
-
+    # we know that K == 2
+    x = circu.getX()
+    t = circu.getSignT()[0]
+    w = lda(x,t)
+    circu.clearlines()
+    dom = np.linspace(-20,20,100)
+    ran = (-w[0] -w[1]*dom )/w[2]
+    ax.plot(dom,ran,'c')
+    grid = [(x,y) for x in np.linspace(-20,20,15) for y in np.linspace(-20,20,15)]
+    for (a,b) in grid:
+        clase = classify(np.array([a,b]), w)
+        ax.plot(a,b,'.{}'.format(colorcodes[clase]))
+    fig.canvas.draw()
+    
 
 axminsquares = plt.axes([0.7, 0.05, 0.1, 0.075])
 axfisher = plt.axes([0.81, 0.05, 0.1, 0.075])
@@ -219,6 +244,7 @@ def update(val):
     global K
     global bfisher
     global bclass
+    circu.clearlines()
     newK = int(math.floor(val))
     #Shrink data points and current class if necessary
     if newK < k:
@@ -258,5 +284,11 @@ def changeclass(event):
     bclass.label.set_text('Class {}'.format(k))
 bclass.on_clicked(changeclass)
 
+axclear = plt.axes([0.1, 0.05, 0.1, 0.075])
+bclear = Button(axclear, 'Clear')
+
+def fclear(event):
+    circu.clear()
+bclear.on_clicked(fclear)
 
 plt.show()
