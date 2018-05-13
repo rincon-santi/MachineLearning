@@ -1,31 +1,30 @@
 from sklearn.datasets import fetch_mldata
-mnist = fetch_mldata('MNIST original', data_home = './data')
 import matplotlib.pyplot as plt
 import numpy as np
 import math
-from matplotlib.widgets import Slider
+from matplotlib.widgets import Slider, Button
 from matplotlib.patches import Rectangle
 
+mnist = fetch_mldata('MNIST original', data_home='./data')
 data = mnist.data
+target = mnist.target
 
 fig, ax = plt.subplots()
 plt.subplots_adjust(bottom=0.2)
-ax.set_xlim([0,28])
-ax.set_ylim([28,0])
+ax.set_xlim([0, 28])
+ax.set_ylim([28, 0])
 ax.set_aspect('equal')
 
-#imagen = np.resize(data[27058], (28,28))
+# imagen = np.resize(data[27058], (28,28))
 ax.add_patch(Rectangle((0,0),28,28,color='#000000'))
-#ax.imshow(imagen, cmap='gray')
-#plt.show()
-
-
+# ax.imshow(imagen, cmap='gray')
+# plt.show()
 
 value = 255
 pressed = False
 
 imagen = np.array([([0]*28)]*28)
-#ax.imshow(imagen, cmap='gray')
+
 
 def dibuja(event):
     global imagen
@@ -50,19 +49,74 @@ def on_move(event): # event.inaxes
 #        print("{}{}".format(event.xdata,event.ydata))
         dibuja(event)    
 
+axclear = plt.axes([0.8, 0.05, 0.1, 0.075])
+bclear = Button(axclear, 'Clear')
+
 axslid = plt.axes([0.5, 0.05, 0.1, 0.075])
 slid = Slider(axslid, 'Brightness', 0, 255, valfmt='%d', valinit=255)
 
 def update(val):
     global value
     value = int(math.floor(val))
-    # prueba jincha
-    ax.clear()
-    ax.imshow(imagen, cmap='gray')
 
+def clearcanv(event):
+    global imagen
+    [p.remove() for p in reversed(ax.patches)]
+    ax.add_patch(Rectangle((0,0),28,28,color='#000000'))
+    imagen = np.array([([0]*28)]*28)
+    print('Clear')
 
+fig.canvas.set_window_title('Practica 2.a')
+
+bclear.on_clicked(clearcanv)
 slid.on_changed(update)
 
+axclsfy = plt.axes([0.2, 0.05, 0.1, 0.075])
+bclsfy = Button(axclsfy, 'Classify')
+
+
+#### Perceptron
+
+class Perceptron:
+    def __init__(self, D):
+        self.w = np.array([0.0]*(D+1))
+    
+    def eval_weights(self, x):
+        return np.dot(self.w, np.concatenate(([1],x)))
+    
+    def eval(self, x):
+        return 1 if self.eval_weights(x) > 0 else -1
+    
+    def train(self, X, T, w0 = None, eta = 0.1):
+        if w0 != None:
+            self.w = w0
+        Xtilde = np.concatenate(([[1] for i in range(X.shape[0])],X), axis=1)
+        for i in np.random.randint(0, len(X), size=len(X)):
+            if T[i] * np.dot(Xtilde[i],self.w) <= 0:
+                self.w = self.w + eta * T[i] * Xtilde[i] 
+    
+    def get_weights(self):
+        return self.w
+
+
+perceptrones = [Perceptron(data.shape[1]) for i in range(10)]
+for i in range(10):
+    perceptrones[i].train(data, [1 if t == i else 0 for t in target])
+
+
+def clsfy(x):
+    return np.argmax([perceptrones[i].eval_weights(x) for i in range(10)])
+
+correctos = 0
+for i in range(len(data)):
+    if clsfy(data[i]) == target[i]:
+        correctos = correctos + 1
+
+
+def fclsfy(event):
+    print( clsfy(np.resize(imagen,28*28)) )
+
+bclsfy.on_clicked(fclsfy)
 
 fig.canvas.mpl_connect('button_press_event', on_press)
 fig.canvas.mpl_connect('button_release_event', on_release)
