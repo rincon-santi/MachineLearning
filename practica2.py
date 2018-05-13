@@ -6,8 +6,6 @@ from matplotlib.widgets import Slider, Button
 from matplotlib.patches import Rectangle
 
 mnist = fetch_mldata('MNIST original', data_home='./data')
-data = mnist.data
-target = mnist.target
 
 fig, ax = plt.subplots()
 plt.subplots_adjust(bottom=0.2)
@@ -15,10 +13,7 @@ ax.set_xlim([0, 28])
 ax.set_ylim([28, 0])
 ax.set_aspect('equal')
 
-# imagen = np.resize(data[27058], (28,28))
 ax.add_patch(Rectangle((0,0),28,28,color='#000000'))
-# ax.imshow(imagen, cmap='gray')
-# plt.show()
 
 value = 255
 pressed = False
@@ -91,27 +86,40 @@ class Perceptron:
         if w0 != None:
             self.w = w0
         Xtilde = np.concatenate(([[1] for i in range(X.shape[0])],X), axis=1)
-        for i in np.random.randint(0, len(X), size=len(X)):
+        for i in np.random.permutation(range(len(X))): # np.random.randint(0, len(X), size=len(X)):
             if T[i] * np.dot(Xtilde[i],self.w) <= 0:
                 self.w = self.w + eta * T[i] * Xtilde[i] 
     
     def get_weights(self):
         return self.w
 
+#### Training data and targets
+
+TAMUESTRA = 0.8
+
+muestra = np.random.permutation(range(len(mnist.data)))
+tamanamiento = int(math.floor(TAMUESTRA * len(mnist.data)))
+
+data = mnist.data[muestra][:tamanamiento]
+target = mnist.target[muestra][:tamanamiento]
 
 perceptrones = [Perceptron(data.shape[1]) for i in range(10)]
 for i in range(10):
     perceptrones[i].train(data, [1 if t == i else 0 for t in target])
 
-
 def clsfy(x):
     return np.argmax([perceptrones[i].eval_weights(x) for i in range(10)])
 
-correctos = 0
-for i in range(len(data)):
-    if clsfy(data[i]) == target[i]:
-        correctos = correctos + 1
+#### Test data and targets
+tdata = mnist.data[muestra][tamanamiento:]
+ttarget = mnist.target[muestra][tamanamiento:]
 
+correctos = 0
+for i in range(len(tdata)):
+    if clsfy(tdata[i]) == ttarget[i]:
+        correctos = correctos + 1
+print( 'Tamaño del training set: {}. Tamaño del test set: {}. Aciertos: {}'.format(
+    tamanamiento, len(mnist.data) - tamanamiento, correctos) )
 
 def fclsfy(event):
     print( clsfy(np.resize(imagen,28*28)) )
